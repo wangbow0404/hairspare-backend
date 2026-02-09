@@ -1,0 +1,164 @@
+# version은 더 이상 필요하지 않습니다 (Docker Compose v2)
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: hairspare-postgres
+    environment:
+      POSTGRES_DB: hairspare
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"  # 포트 충돌 방지를 위해 5433으로 변경
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    container_name: hairspare-auth-service
+    ports:
+      - "8101:8101"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/hairspare
+      - JWT_SECRET_KEY=your-secret-key-change-in-production
+      - SERVICE_PORT=8101
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8101/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  job-service:
+    build:
+      context: .
+      dockerfile: services/job-service/Dockerfile
+    container_name: hairspare-job-service
+    ports:
+      - "8103:8103"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/hairspare
+      - AUTH_SERVICE_URL=http://auth-service:8101
+      - SERVICE_PORT=8103
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8103/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  schedule-service:
+    build:
+      context: .
+      dockerfile: services/schedule-service/Dockerfile
+    container_name: hairspare-schedule-service
+    ports:
+      - "8104:8104"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/hairspare
+      - AUTH_SERVICE_URL=http://auth-service:8101
+      - SERVICE_PORT=8104
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8104/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  chat-service:
+    build:
+      context: .
+      dockerfile: services/chat-service/Dockerfile
+    container_name: hairspare-chat-service
+    ports:
+      - "8105:8105"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/hairspare
+      - AUTH_SERVICE_URL=http://auth-service:8101
+      - JOB_SERVICE_URL=http://job-service:8103
+      - SERVICE_PORT=8105
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8105/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  energy-service:
+    build:
+      context: .
+      dockerfile: services/energy-service/Dockerfile
+    container_name: hairspare-energy-service
+    ports:
+      - "8106:8106"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/hairspare
+      - AUTH_SERVICE_URL=http://auth-service:8101
+      - SERVICE_PORT=8106
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8106/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    container_name: hairspare-api-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - AUTH_SERVICE_URL=http://auth-service:8101
+      - JOB_SERVICE_URL=http://job-service:8103
+      - SCHEDULE_SERVICE_URL=http://schedule-service:8104
+      - CHAT_SERVICE_URL=http://chat-service:8105
+      - ENERGY_SERVICE_URL=http://energy-service:8106
+      - JWT_SECRET_KEY=your-secret-key-change-in-production
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:8080
+      - GATEWAY_PORT=8000
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      job-service:
+        condition: service_healthy
+      schedule-service:
+        condition: service_healthy
+      chat-service:
+        condition: service_healthy
+      energy-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
