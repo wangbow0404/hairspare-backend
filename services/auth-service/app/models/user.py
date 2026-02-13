@@ -30,18 +30,18 @@ class User(Base):
     role = Column(String, nullable=False)  # "spare" | "shop" | "seller"
     name = Column(String, nullable=True)
     phone = Column(String, nullable=True)
-    birth_year = Column(Integer, nullable=True)
+    birth_year = Column("birthYear", Integer, nullable=True)
     gender = Column(String, nullable=True)  # "M" | "F"
-    profile_image = Column(String, nullable=True)
-    referral_code = Column(String, unique=True, nullable=True)
-    contact_warning_count = Column(Integer, nullable=True, default=0)
-    contact_warning_updated_at = Column(DateTime, nullable=True)
-    is_banned = Column(Boolean, nullable=True, default=False)
-    banned_at = Column(DateTime, nullable=True)
-    ban_reason = Column(String, nullable=True)
-    notification_settings = Column(JSON, nullable=True)
-    created_at = Column(DateTime, server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+    profile_image = Column("profileImage", String, nullable=True)
+    referral_code = Column("referralCode", String, unique=True, nullable=True)
+    contact_warning_count = Column("contactWarningCount", Integer, nullable=True, default=0)
+    contact_warning_updated_at = Column("contactWarningUpdatedAt", DateTime, nullable=True)
+    is_banned = Column("isBanned", Boolean, nullable=True, default=False)
+    banned_at = Column("bannedAt", DateTime, nullable=True)
+    ban_reason = Column("banReason", String, nullable=True)
+    notification_settings = Column("notificationSettings", JSON, nullable=True)
+    created_at = Column("createdAt", DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column("updatedAt", DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # 인덱스
     __table_args__ = (

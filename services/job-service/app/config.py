@@ -21,3 +21,7 @@ SERVICE_PORT = int(os.getenv("SERVICE_PORT", "8102"))
 
 # Auth Service URL (로컬 개발용)
 AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://localhost:8101")
+ENERGY_SERVICE_URL = os.getenv("ENERGY_SERVICE_URL", "http://localhost:8106")
+SCHEDULE_SERVICE_URL = os.getenv("SCHEDULE_SERVICE_URL", "http://localhost:8104")
+ENERGY_SERVICE_URL = os.getenv("ENERGY_SERVICE_URL", "http://localhost:8106")
+SCHEDULE_SERVICE_URL = os.getenv("SCHEDULE_SERVICE_URL", "http://localhost:8104")

@@ -15,16 +15,18 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../"))
 from shared.auth.jwt import verify_token
 from shared.exceptions.app_exceptions import AuthenticationException
-from .config import CORS_ORIGINS
+from .config import CORS_ORIGINS, CORS_ORIGIN_REGEX
 
 
 def setup_cors(app):
     """
     CORS 미들웨어 설정
+    Flutter 웹은 랜덤 포트에서 실행될 수 있으므로 localhost 정규식 허용
     """
     app.add_middleware(
         CORSMiddleware,
         allow_origins=CORS_ORIGINS,
+        allow_origin_regex=CORS_ORIGIN_REGEX,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

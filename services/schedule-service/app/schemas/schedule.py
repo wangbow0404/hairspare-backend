@@ -19,6 +19,8 @@ from shared.schemas.base import BaseSchema
 class ScheduleCreate(BaseSchema):
     """스케줄 생성 스키마"""
     job_id: str = Field(..., description="공고 ID")
+    spare_id: Optional[str] = Field(None, description="스페어 ID (승인 시 필수)")
+    shop_id: Optional[str] = Field(None, description="매장 ID (승인 시 필수)")
     date: str = Field(..., description="YYYY-MM-DD 형식")
     start_time: str = Field(..., description="HH:mm 형식")
     end_time: Optional[str] = Field(None, description="HH:mm 형식")

@@ -8,6 +8,8 @@ from typing import Optional, List
 from datetime import datetime
 import sys
 import os
+import httpx
+import httpx
 
 # shared 라이브러리 경로 추가
 current_file = os.path.abspath(__file__)
@@ -122,8 +124,8 @@ def delete_job(db: Session, job_id: str, shop_id: str) -> None:
     db.commit()
 
 
-def apply_to_job(db: Session, job_id: str, spare_id: str) -> Application:
-    """공고 지원"""
+def apply_to_job(db: Session, job_id: str, spare_id: str, auth_header: Optional[str] = None) -> Application:
+    """공고 지원 + 에너지 잠금"""
     job = get_job_by_id(db, job_id)
     if not job:
         raise NotFoundException("공고를 찾을 수 없습니다")
@@ -136,17 +138,125 @@ def apply_to_job(db: Session, job_id: str, spare_id: str) -> Application:
     if existing:
         raise ConflictException("이미 지원한 공고입니다")
     
+    energy_locked = False
+    if job.energy > 0 and auth_header:
+        from ..config import ENERGY_SERVICE_URL
+        try:
+            resp = httpx.post(
+                f"{ENERGY_SERVICE_URL}/api/energy/lock",
+                params={"job_id": job_id, "amount": job.energy},
+                headers={"Authorization": auth_header},
+                timeout=10.0,
+            )
+            if resp.status_code in (200, 201):
+                energy_locked = True
+            elif resp.status_code == 409:
+                raise ConflictException("에너지 잔액이 부족합니다")
+            else:
+                raise ConflictException("에너지 잠금에 실패했습니다")
+        except ConflictException:
+            raise
+        except Exception as e:
+            raise ConflictException(f"에너지 잠금 중 오류: {str(e)}")
+    
     application = Application(
         job_id=job_id,
         spare_id=spare_id,
         status="pending",
-        energy_locked=False,  # TODO: Energy Service에서 잠금 처리
+        energy_locked=energy_locked,
     )
     
     db.add(application)
     db.commit()
     db.refresh(application)
     
+    return application
+
+
+def get_applications_for_shop(db: Session, shop_id: str) -> List[Application]:
+    """매장의 공고에 대한 지원 목록 (Application + Job join)"""
+    return (
+        db.query(Application)
+        .join(Job, Application.job_id == Job.id)
+        .filter(Job.shop_id == shop_id)
+        .order_by(Application.created_at.desc())
+        .all()
+    )
+
+
+def approve_application(
+    db: Session,
+    application_id: str,
+    shop_id: str,
+    auth_header: Optional[str] = None,
+) -> Application:
+    """지원 승인 + 스케줄 생성"""
+    application = db.query(Application).filter(Application.id == application_id).first()
+    if not application:
+        raise NotFoundException("지원을 찾을 수 없습니다")
+    
+    job = get_job_by_id(db, application.job_id)
+    if not job or job.shop_id != shop_id:
+        raise AuthorizationException("해당 지원을 승인할 권한이 없습니다")
+    
+    if application.status != "pending":
+        raise ConflictException("이미 처리된 지원입니다")
+    
+    application.status = "approved"
+    db.commit()
+    
+    # Schedule Service에 스케줄 생성 요청
+    from ..config import SCHEDULE_SERVICE_URL
+    try:
+        end_time = None
+        if job.time:
+            parts = job.time.split(":")
+            if len(parts) >= 2:
+                h, m = int(parts[0]), int(parts[1])
+                end_h = (h + 1) % 24
+                end_time = f"{end_h:02d}:{m:02d}"
+        body = {
+            "job_id": job.id,
+            "spare_id": application.spare_id,
+            "shop_id": job.shop_id,
+            "date": job.date,
+            "start_time": job.time,
+            "end_time": end_time or job.time,
+        }
+        headers = {"Content-Type": "application/json"}
+        if auth_header:
+            headers["Authorization"] = auth_header
+        resp = httpx.post(
+            f"{SCHEDULE_SERVICE_URL}/api/schedules",
+            json=body,
+            headers=headers,
+            timeout=10.0,
+        )
+        if resp.status_code not in (200, 201):
+            print(f"[Job] Schedule 생성 실패: {resp.status_code} {resp.text}")
+    except Exception as e:
+        print(f"[Job] Schedule 생성 오류: {e}")
+    
+    db.refresh(application)
+    return application
+
+
+def reject_application(db: Session, application_id: str, shop_id: str) -> Application:
+    """지원 거절 (에너지 잠금 시 반환은 Energy Service에서 처리 - 추후)"""
+    application = db.query(Application).filter(Application.id == application_id).first()
+    if not application:
+        raise NotFoundException("지원을 찾을 수 없습니다")
+    
+    job = get_job_by_id(db, application.job_id)
+    if not job or job.shop_id != shop_id:
+        raise AuthorizationException("해당 지원을 거절할 권한이 없습니다")
+    
+    if application.status != "pending":
+        raise ConflictException("이미 처리된 지원입니다")
+    
+    application.status = "rejected"
+    db.commit()
+    db.refresh(application)
     return application
 
 
